@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hangfire Cosmos Storage Provider - Job Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .job-card {
+            transition: transform 0.2s;
+        }
+        .job-card:hover {
+            transform: translateY(-2px);
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-healthy { background-color: #28a745; }
+        .status-warning { background-color: #ffc107; }
+        .status-error { background-color: #dc3545; }
+        .log-output {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .card-header {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-cogs me-2"></i>
+                Hangfire Cosmos Storage Provider
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/hangfire" target="_blank">
+                    <i class="fas fa-tachometer-alt me-1"></i>
+                    Dashboard
+                </a>
+                <a class="nav-link" href="/swagger" target="_blank">
+                    <i class="fas fa-code me-1"></i>
+                    API Docs
+                </a>
+                <a class="nav-link" href="/health" target="_blank">
+                    <i class="fas fa-heartbeat me-1"></i>
+                    Health
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- System Status -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle me-2"></i>
+                            System Status
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center">
+                                    <span class="status-indicator status-healthy"></span>
+                                    <span>Application: <strong>Running</strong></span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center">
+                                    <span class="status-indicator" id="cosmosStatus"></span>
+                                    <span>Cosmos DB: <strong id="cosmosStatusText">Checking...</strong></span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center">
+                                    <span class="status-indicator" id="hangfireStatus"></span>
+                                    <span>Hangfire: <strong id="hangfireStatusText">Checking...</strong></span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center">
+                                    <span class="status-indicator status-healthy"></span>
+                                    <span>Jobs: <strong id="jobCount">0</strong> Active</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Job Testing -->
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-play-circle me-2"></i>
+                            Job Testing
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <!-- Simple Job -->
+                            <div class="col-md-6">
+                                <div class="card job-card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="fas fa-bolt text-primary me-2"></i>
+                                            Simple Job
+                                        </h6>
+                                        <p class="card-text small">Quick fire-and-forget job</p>
+                                        <div class="mb-2">
+                                            <input type="text" class="form-control form-control-sm" 
+                                                   id="simpleJobMessage" placeholder="Job message" 
+                                                   value="Hello from simple job!">
+                                        </div>
+                                        <button class="btn btn-primary btn-sm w-100" onclick="enqueueSimpleJob()">
+                                            <i class="fas fa-play me-1"></i>
+                                            Enqueue
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Delayed Job -->
+                            <div class="col-md-6">
+                                <div class="card job-card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="fas fa-clock text-warning me-2"></i>
+                                            Delayed Job
+                                        </h6>
+                                        <p class="card-text small">Job scheduled for future execution</p>
+                                        <div class="mb-2">
+                                            <input type="number" class="form-control form-control-sm" 
+                                                   id="delaySeconds" placeholder="Delay (seconds)" value="30">
+                                        </div>
+                                        <button class="btn btn-warning btn-sm w-100" onclick="enqueueDelayedJob()">
+                                            <i class="fas fa-clock me-1"></i>
+                                            Schedule
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Long Running Job -->
+                            <div class="col-md-6">
+                                <div class="card job-card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="fas fa-hourglass-half text-info me-2"></i>
+                                            Long Running Job
+                                        </h6>
+                                        <p class="card-text small">Job that takes time to complete</p>
+                                        <div class="mb-2">
+                                            <input type="number" class="form-control form-control-sm" 
+                                                   id="jobDuration" placeholder="Duration (seconds)" value="60">
+                                        </div>
+                                        <button class="btn btn-info btn-sm w-100" onclick="enqueueLongRunningJob()">
+                                            <i class="fas fa-hourglass-half me-1"></i>
+                                            Start
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Failing Job -->
+                            <div class="col-md-6">
+                                <div class="card job-card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="fas fa-exclamation-triangle text-danger me-2"></i>
+                                            Failing Job
+                                        </h6>
+                                        <p class="card-text small">Job that intentionally fails</p>
+                                        <div class="mb-2">
+                                            <input type="text" class="form-control form-control-sm" 
+                                                   id="errorMessage" placeholder="Error message" 
+                                                   value="Test error for debugging">
+                                        </div>
+                                        <button class="btn btn-danger btn-sm w-100" onclick="enqueueFailingJob()">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>
+                                            Fail
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Batch Jobs -->
+                            <div class="col-md-6">
+                                <div class="card job-card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="fas fa-layer-group text-success me-2"></i>
+                                            Batch Jobs
+                                        </h6>
+                                        <p class="card-text small">Multiple related jobs</p>
+                                        <div class="mb-2">
+                                            <input type="number" class="form-control form-control-sm" 
+                                                   id="batchSize" placeholder="Batch size" value="5">
+                                        </div>
+                                        <button class="btn btn-success btn-sm w-100" onclick="enqueueBatchJobs()">
+                                            <i class="fas fa-layer-group me-1"></i>
+                                            Create Batch
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Recurring Job -->
+                            <div class="col-md-6">
+                                <div class="card job-card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="fas fa-redo text-secondary me-2"></i>
+                                            Recurring Job
+                                        </h6>
+                                        <p class="card-text small">Periodic job with cron expression</p>
+                                        <div class="mb-2">
+                                            <select class="form-select form-select-sm" id="cronExpression">
+                                                <option value="*/1 * * * *">Every minute</option>
+                                                <option value="*/5 * * * *">Every 5 minutes</option>
+                                                <option value="0 * * * *">Every hour</option>
+                                                <option value="0 0 * * *">Daily</option>
+                                            </select>
+                                        </div>
+                                        <button class="btn btn-secondary btn-sm w-100" onclick="createRecurringJob()">
+                                            <i class="fas fa-redo me-1"></i>
+                                            Create
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Log -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-list me-2"></i>
+                            Activity Log
+                        </h5>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="clearLog()">
+                            <i class="fas fa-trash me-1"></i>
+                            Clear
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="activityLog" class="log-output">
+                            <div class="text-muted">Activity will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Activity logging
+        function logActivity(message, type = 'info') {
+            const log = document.getElementById('activityLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle';
+            const color = type === 'success' ? 'text-success' : type === 'error' ? 'text-danger' : 'text-info';
+            
+            const entry = document.createElement('div');
+            entry.className = 'mb-2';
+            entry.innerHTML = `
+                <small class="text-muted">[${timestamp}]</small>
+                <i class="fas fa-${icon} ${color} me-1"></i>
+                <span>${message}</span>
+            `;
+            
+            if (log.children.length === 1 && log.children[0].classList.contains('text-muted')) {
+                log.innerHTML = '';
+            }
+            
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('activityLog').innerHTML = '<div class="text-muted">Activity will appear here...</div>';
+        }
+
+        // API calls
+        async function makeApiCall(endpoint, data = null) {
+            try {
+                const options = {
+                    method: data ? 'POST' : 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+                
+                if (data) {
+                    options.body = JSON.stringify(data);
+                }
+                
+                const response = await fetch(endpoint, options);
+                const result = await response.json();
+                
+                if (response.ok) {
+                    return result;
+                } else {
+                    throw new Error(result.message || 'API call failed');
+                }
+            } catch (error) {
+                logActivity(`Error: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // Job functions
+        async function enqueueSimpleJob() {
+            const message = document.getElementById('simpleJobMessage').value;
+            try {
+                const result = await makeApiCall('/api/job/simple', { message });
+                logActivity(`Simple job enqueued: ${result.jobId}`, 'success');
+            } catch (error) {
+                logActivity(`Failed to enqueue simple job: ${error.message}`, 'error');
+            }
+        }
+
+        async function enqueueDelayedJob() {
+            const delayInSeconds = parseInt(document.getElementById('delaySeconds').value);
+            try {
+                const result = await makeApiCall('/api/job/delayed', { 
+                    message: 'Delayed job execution', 
+                    delayInSeconds 
+                });
+                logActivity(`Delayed job scheduled: ${result.jobId} (${delayInSeconds}s delay)`, 'success');
+            } catch (error) {
+                logActivity(`Failed to schedule delayed job: ${error.message}`, 'error');
+            }
+        }
+
+        async function enqueueLongRunningJob() {
+            const durationInSeconds = parseInt(document.getElementById('jobDuration').value);
+            try {
+                const result = await makeApiCall('/api/job/long-running', { 
+                    jobName: 'Long Running Test Job',
+                    durationInSeconds 
+                });
+                logActivity(`Long running job started: ${result.jobId} (${durationInSeconds}s duration)`, 'success');
+            } catch (error) {
+                logActivity(`Failed to start long running job: ${error.message}`, 'error');
+            }
+        }
+
+        async function enqueueFailingJob() {
+            const errorMessage = document.getElementById('errorMessage').value;
+            try {
+                const result = await makeApiCall('/api/job/failing', { errorMessage });
+                logActivity(`Failing job enqueued: ${result.jobId}`, 'success');
+            } catch (error) {
+                logActivity(`Failed to enqueue failing job: ${error.message}`, 'error');
+            }
+        }
+
+        async function enqueueBatchJobs() {
+            const itemCount = parseInt(document.getElementById('batchSize').value);
+            try {
+                const result = await makeApiCall('/api/job/batch', { 
+                    dataPrefix: 'BatchItem',
+                    itemCount 
+                });
+                logActivity(`Batch jobs created: ${result.jobIds.length} jobs in batch ${result.batchId}`, 'success');
+            } catch (error) {
+                logActivity(`Failed to create batch jobs: ${error.message}`, 'error');
+            }
+        }
+
+        async function createRecurringJob() {
+            const cronExpression = document.getElementById('cronExpression').value;
+            const jobId = `recurring-job-${Date.now()}`;
+            try {
+                const result = await makeApiCall('/api/job/recurring', { 
+                    jobId,
+                    cronExpression 
+                });
+                logActivity(`Recurring job created: ${jobId} (${cronExpression})`, 'success');
+            } catch (error) {
+                logActivity(`Failed to create recurring job: ${error.message}`, 'error');
+            }
+        }
+
+        // Status checking
+        async function checkSystemStatus() {
+            try {
+                // Check Cosmos DB
+                const cosmosResponse = await fetch('/api/health/cosmos');
+                const cosmosStatus = document.getElementById('cosmosStatus');
+                const cosmosStatusText = document.getElementById('cosmosStatusText');
+                
+                if (cosmosResponse.ok) {
+                    cosmosStatus.className = 'status-indicator status-healthy';
+                    cosmosStatusText.textContent = 'Connected';
+                } else {
+                    cosmosStatus.className = 'status-indicator status-error';
+                    cosmosStatusText.textContent = 'Error';
+                }
+
+                // Check Hangfire
+                const hangfireResponse = await fetch('/api/health/hangfire');
+                const hangfireStatus = document.getElementById('hangfireStatus');
+                const hangfireStatusText = document.getElementById('hangfireStatusText');
+                
+                if (hangfireResponse.ok) {
+                    const hangfireData = await hangfireResponse.json();
+                    hangfireStatus.className = 'status-indicator status-healthy';
+                    hangfireStatusText.textContent = 'Running';
+                    
+                    // Update job count
+                    const totalJobs = hangfireData.overview.enqueuedCount + hangfireData.overview.processingCount;
+                    document.getElementById('jobCount').textContent = totalJobs;
+                } else {
+                    hangfireStatus.className = 'status-indicator status-error';
+                    hangfireStatusText.textContent = 'Error';
+                }
+            } catch (error) {
+                console.error('Status check failed:', error);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            logActivity('Job Management UI loaded', 'success');
+            checkSystemStatus();
+            
+            // Check status every 30 seconds
+            setInterval(checkSystemStatus, 30000);
+        });
+    </script>
+</body>
+</html>
