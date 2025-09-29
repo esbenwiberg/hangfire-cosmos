@@ -473,17 +473,17 @@ public class CosmosMonitoringApi : IMonitoringApi
         }
         
         // Try to get from processing state history
-        if (job.StateHistory != null)
+        if (job.StateHistory != null && job.StateHistory.Count > 0)
         {
             var processingState = job.StateHistory.LastOrDefault(h => h.State == "processing");
-            if (processingState?.Data?.TryGetValue("ServerId", out var serverId) == true && !string.IsNullOrEmpty(serverId))
+            if (processingState?.Data != null && processingState.Data.TryGetValue("ServerId", out var serverId) && !string.IsNullOrEmpty(serverId))
             {
                 return serverId;
             }
         }
         
         // Fallback: try to get from current state data
-        if (job.StateData?.TryGetValue("ServerId", out var currentServerId) == true && !string.IsNullOrEmpty(currentServerId))
+        if (job.StateData != null && job.StateData.TryGetValue("ServerId", out var currentServerId) && !string.IsNullOrEmpty(currentServerId))
         {
             return currentServerId;
         }
