@@ -77,7 +77,6 @@ try
 
     // Configure Hangfire with Cosmos DB storage (with fallback to in-memory)
     var cosmosOptions = builder.Configuration.GetSection("HangfireCosmosOptions");
-    var useInMemoryFallback = builder.Configuration.GetValue<bool>("HangfireCosmosOptions:UseInMemoryFallback", false);
     
     builder.Services.AddHangfire(configuration =>
     {
@@ -86,42 +85,34 @@ try
             .UseSimpleAssemblyNameTypeSerializer()
             .UseRecommendedSerializerSettings();
 
-        if (useInMemoryFallback)
+        try
+        {
+            // Test Cosmos DB connectivity before configuring
+            using var testClient = new CosmosClient(cosmosConnectionString);
+            var testTask = testClient.ReadAccountAsync();
+            testTask.Wait(TimeSpan.FromSeconds(5));
+            
+            // Early logging before DI container is available
+            Console.WriteLine("Cosmos DB connection successful, using Cosmos storage");
+            configuration.UseCosmosStorage(cosmosConnectionString, options =>
+            {
+                options.DatabaseName = cosmosOptions["DatabaseName"] ?? "hangfire";
+                options.DefaultThroughput = int.Parse(cosmosOptions["DefaultThroughput"] ?? "400");
+                options.AutoCreateDatabase = bool.Parse(cosmosOptions["AutoCreateDatabase"] ?? "true");
+                options.AutoCreateContainers = bool.Parse(cosmosOptions["AutoCreateContainers"] ?? "true");
+                options.DefaultJobExpiration = TimeSpan.Parse(cosmosOptions["DefaultJobExpiration"] ?? "7.00:00:00");
+                options.ServerTimeout = TimeSpan.Parse(cosmosOptions["ServerTimeout"] ?? "00:05:00");
+                options.LockTimeout = TimeSpan.Parse(cosmosOptions["LockTimeout"] ?? "00:01:00");
+                options.MaxRetryAttempts = int.Parse(cosmosOptions["MaxRetryAttempts"] ?? "3");
+                options.RetryDelay = TimeSpan.Parse(cosmosOptions["RetryDelay"] ?? "00:00:00.500");
+                options.CollectionStrategy = Enum.TryParse<CollectionStrategy>(cosmosOptions["CollectionStrategy"], out var strategy) ? strategy : CollectionStrategy.Dedicated;
+            });
+        }
+        catch (Exception ex)
         {
             // Early logging before DI container is available
-            Console.WriteLine("Using in-memory storage for Hangfire (Cosmos DB not available)");
+            Console.WriteLine($"Cosmos DB not available, falling back to in-memory storage: {ex.Message}");
             configuration.UseMemoryStorage();
-        }
-        else
-        {
-            try
-            {
-                // Test Cosmos DB connectivity before configuring
-                using var testClient = new Microsoft.Azure.Cosmos.CosmosClient(cosmosConnectionString);
-                var testTask = testClient.ReadAccountAsync();
-                testTask.Wait(TimeSpan.FromSeconds(5));
-                
-                // Early logging before DI container is available
-                Console.WriteLine("Cosmos DB connection successful, using Cosmos storage");
-                configuration.UseCosmosStorage(cosmosConnectionString, options =>
-                {
-                    options.DatabaseName = cosmosOptions["DatabaseName"] ?? "hangfire";
-                    options.DefaultThroughput = int.Parse(cosmosOptions["DefaultThroughput"] ?? "400");
-                    options.AutoCreateDatabase = bool.Parse(cosmosOptions["AutoCreateDatabase"] ?? "true");
-                    options.AutoCreateContainers = bool.Parse(cosmosOptions["AutoCreateContainers"] ?? "true");
-                    options.DefaultJobExpiration = TimeSpan.Parse(cosmosOptions["DefaultJobExpiration"] ?? "7.00:00:00");
-                    options.ServerTimeout = TimeSpan.Parse(cosmosOptions["ServerTimeout"] ?? "00:05:00");
-                    options.LockTimeout = TimeSpan.Parse(cosmosOptions["LockTimeout"] ?? "00:01:00");
-                    options.MaxRetryAttempts = int.Parse(cosmosOptions["MaxRetryAttempts"] ?? "3");
-                    options.RetryDelay = TimeSpan.Parse(cosmosOptions["RetryDelay"] ?? "00:00:00.500");
-                });
-            }
-            catch (Exception ex)
-            {
-                // Early logging before DI container is available
-                Console.WriteLine($"Cosmos DB not available, falling back to in-memory storage: {ex.Message}");
-                configuration.UseMemoryStorage();
-            }
         }
     });
 

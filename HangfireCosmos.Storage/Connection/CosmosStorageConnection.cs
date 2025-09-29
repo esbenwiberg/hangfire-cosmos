@@ -120,7 +120,9 @@ public class CosmosStorageConnection : IStorageConnection
             }
         }
 
-        return null!; // No jobs available
+        // Hangfire's Worker expects either a valid job or an OperationCanceledException
+        // when no jobs are available. Returning null causes NullReferenceException.
+        throw new OperationCanceledException("No jobs available in any of the specified queues.");
     }
 
     /// <inheritdoc />
@@ -143,10 +145,15 @@ public class CosmosStorageConnection : IStorageConnection
     /// <inheritdoc />
     public JobData GetJobData(string jobId)
     {
-        if (string.IsNullOrEmpty(jobId)) throw new ArgumentNullException(nameof(jobId));
+        if (string.IsNullOrEmpty(jobId))
+        {
+            // Hangfire sometimes passes null/empty jobIds during cleanup operations
+            // Return null instead of throwing to allow graceful handling
+            return null;
+        }
 
         var job = GetJobDocument(jobId);
-        if (job == null) return null!;
+        if (job == null) return null;
 
         return new JobData
         {

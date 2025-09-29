@@ -271,6 +271,7 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
             Automatic = true,
             IncludedPaths =
             {
+                new IncludedPath { Path = "/*" },
                 new IncludedPath { Path = "/documentType/?" },
                 new IncludedPath { Path = "/state/?" },
                 new IncludedPath { Path = "/queueName/?" },
@@ -295,6 +296,7 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
             Automatic = true,
             IncludedPaths =
             {
+                new IncludedPath { Path = "/*" },
                 new IncludedPath { Path = "/documentType/?" },
                 new IncludedPath { Path = "/serverId/?" },
                 new IncludedPath { Path = "/lastHeartbeat/?" },
@@ -311,6 +313,7 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
             Automatic = true,
             IncludedPaths =
             {
+                new IncludedPath { Path = "/*" },
                 new IncludedPath { Path = "/documentType/?" },
                 new IncludedPath { Path = "/resource/?" },
                 new IncludedPath { Path = "/owner/?" },
@@ -327,6 +330,7 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
             Automatic = true,
             IncludedPaths =
             {
+                new IncludedPath { Path = "/*" },
                 new IncludedPath { Path = "/documentType/?" },
                 new IncludedPath { Path = "/queueName/?" },
                 new IncludedPath { Path = "/lastUpdated/?" }
@@ -342,6 +346,7 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
             Automatic = true,
             IncludedPaths =
             {
+                new IncludedPath { Path = "/*" },
                 new IncludedPath { Path = "/documentType/?" },
                 new IncludedPath { Path = "/key/?" },
                 new IncludedPath { Path = "/value/?" },
@@ -359,6 +364,7 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
             Automatic = true,
             IncludedPaths =
             {
+                new IncludedPath { Path = "/*" },
                 new IncludedPath { Path = "/documentType/?" },
                 new IncludedPath { Path = "/key/?" },
                 new IncludedPath { Path = "/field/?" },
@@ -375,6 +381,7 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
             Automatic = true,
             IncludedPaths =
             {
+                new IncludedPath { Path = "/*" },
                 new IncludedPath { Path = "/documentType/?" },
                 new IncludedPath { Path = "/key/?" },
                 new IncludedPath { Path = "/index/?" },
@@ -391,6 +398,7 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
             Automatic = true,
             IncludedPaths =
             {
+                new IncludedPath { Path = "/*" },
                 new IncludedPath { Path = "/documentType/?" },
                 new IncludedPath { Path = "/key/?" },
                 new IncludedPath { Path = "/expireAt/?" }

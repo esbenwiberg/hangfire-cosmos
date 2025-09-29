@@ -1,6 +1,7 @@
 using Hangfire.Storage;
 using HangfireCosmos.Storage.Documents;
 using HangfireCosmos.Storage.Repository;
+using System.Collections.Generic;
 
 namespace HangfireCosmos.Storage.Connection;
 
@@ -52,7 +53,24 @@ public class CosmosFetchedJob : IFetchedJob
 
         // Requeue the job by setting it back to enqueued state
         _jobDocument.State = "enqueued";
+        
+        // Set state data with Queue information for Hangfire dashboard
+        _jobDocument.StateData = new Dictionary<string, string>
+        {
+            ["Queue"] = _jobDocument.QueueName ?? "default",
+            ["EnqueuedAt"] = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ")
+        };
+        
         _jobDocument.UpdatedAt = DateTime.UtcNow;
+
+        // Add to state history
+        _jobDocument.StateHistory.Add(new StateHistoryEntry
+        {
+            State = "enqueued",
+            Reason = "Requeued",
+            CreatedAt = DateTime.UtcNow,
+            Data = _jobDocument.StateData
+        });
         
         _repository.UpdateDocumentAsync(_options.JobsContainerName, _jobDocument).GetAwaiter().GetResult();
         _requeued = true;

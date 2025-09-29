@@ -41,6 +41,7 @@ public class CosmosMonitoringApi : IMonitoringApi
             stats.Failed = GetJobCountByState("failed");
             stats.Scheduled = GetJobCountByState("scheduled");
             stats.Deleted = GetJobCountByState("deleted");
+            stats.Awaiting = GetJobCountByState("awaiting");
 
             // Get server count
             var serverQuery = new QueryDefinition(
@@ -302,6 +303,33 @@ public class CosmosMonitoringApi : IMonitoringApi
     }
 
     /// <inheritdoc />
+    public JobList<AwaitingJobDto> AwaitingJobs(int from, int perPage)
+    {
+        var query = new QueryDefinition(
+            "SELECT * FROM c WHERE c.documentType = 'job' AND c.state = 'awaiting' ORDER BY c.createdAt OFFSET @offset LIMIT @limit")
+            .WithParameter("@offset", from)
+            .WithParameter("@limit", perPage);
+
+        var jobs = _repository.QueryDocumentsAsync<JobDocument>(
+            _options.JobsContainerName, query).GetAwaiter().GetResult();
+
+        var result = new List<KeyValuePair<string, AwaitingJobDto>>();
+        
+        foreach (var job in jobs)
+        {
+            var dto = new AwaitingJobDto
+            {
+                Job = DeserializeJob(job.InvocationData),
+                InAwaitingState = job.State == "awaiting"
+            };
+            
+            result.Add(new KeyValuePair<string, AwaitingJobDto>(job.JobId, dto));
+        }
+
+        return new JobList<AwaitingJobDto>(result);
+    }
+
+    /// <inheritdoc />
     public IList<ServerDto> GetServers()
     {
         var query = new QueryDefinition(
@@ -435,11 +463,33 @@ public class CosmosMonitoringApi : IMonitoringApi
     /// Gets the server ID from state history.
     /// </summary>
     /// <param name="job">The job document.</param>
-    /// <returns>The server ID or null.</returns>
-    private string? GetServerIdFromStateHistory(JobDocument job)
+    /// <returns>The server ID, never null.</returns>
+    private string GetServerIdFromStateHistory(JobDocument job)
     {
-        var processingState = job.StateHistory.LastOrDefault(h => h.State == "processing");
-        return processingState?.Data.TryGetValue("ServerId", out var serverId) == true ? serverId : null;
+        // Handle null job parameter
+        if (job == null)
+        {
+            return "unknown-server";
+        }
+        
+        // Try to get from processing state history
+        if (job.StateHistory != null)
+        {
+            var processingState = job.StateHistory.LastOrDefault(h => h.State == "processing");
+            if (processingState?.Data?.TryGetValue("ServerId", out var serverId) == true && !string.IsNullOrEmpty(serverId))
+            {
+                return serverId;
+            }
+        }
+        
+        // Fallback: try to get from current state data
+        if (job.StateData?.TryGetValue("ServerId", out var currentServerId) == true && !string.IsNullOrEmpty(currentServerId))
+        {
+            return currentServerId;
+        }
+        
+        // Return a default server ID to prevent null reference exceptions
+        return "unknown-server";
     }
 
     /// <summary>
@@ -593,6 +643,12 @@ public class CosmosMonitoringApi : IMonitoringApi
     public long DeletedListCount()
     {
         return GetJobCountByState("deleted");
+    }
+
+    /// <inheritdoc />
+    public long AwaitingCount()
+    {
+        return GetJobCountByState("awaiting");
     }
 
     /// <inheritdoc />

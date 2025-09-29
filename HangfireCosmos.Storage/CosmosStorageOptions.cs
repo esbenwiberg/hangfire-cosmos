@@ -3,6 +3,24 @@ using Microsoft.Azure.Cosmos;
 namespace HangfireCosmos.Storage;
 
 /// <summary>
+/// Defines the collection organization strategy.
+/// </summary>
+public enum CollectionStrategy
+{
+    /// <summary>
+    /// Each document type gets its own dedicated container (8 containers total).
+    /// Best for high-volume, performance-critical deployments.
+    /// </summary>
+    Dedicated,
+    
+    /// <summary>
+    /// Documents are consolidated into 3 logical containers.
+    /// Best for cost-effective, smaller deployments.
+    /// </summary>
+    Consolidated
+}
+
+/// <summary>
 /// Configuration options for the Cosmos DB storage provider.
 /// </summary>
 public class CosmosStorageOptions
@@ -11,6 +29,11 @@ public class CosmosStorageOptions
     /// Gets or sets the name of the Cosmos database.
     /// </summary>
     public string DatabaseName { get; set; } = "hangfire";
+
+    /// <summary>
+    /// Gets or sets the collection strategy for container organization.
+    /// </summary>
+    public CollectionStrategy CollectionStrategy { get; set; } = CollectionStrategy.Dedicated;
 
     /// <summary>
     /// Gets or sets the name of the Jobs container.
@@ -51,6 +74,18 @@ public class CosmosStorageOptions
     /// Gets or sets the name of the Counters container.
     /// </summary>
     public string CountersContainerName { get; set; } = "counters";
+
+    /// <summary>
+    /// Gets or sets the name of the consolidated metadata container (used in Consolidated strategy).
+    /// Contains servers, locks, queues, and counters documents.
+    /// </summary>
+    public string MetadataContainerName { get; set; } = "metadata";
+
+    /// <summary>
+    /// Gets or sets the name of the consolidated collections container (used in Consolidated strategy).
+    /// Contains sets, hashes, and lists documents.
+    /// </summary>
+    public string CollectionsContainerName { get; set; } = "collections";
 
     /// <summary>
     /// Gets or sets the default throughput (RU/s) for containers.
@@ -159,6 +194,16 @@ public class CosmosStorageOptions
         if (string.IsNullOrWhiteSpace(JobsContainerName))
             throw new ArgumentException("JobsContainerName cannot be null or empty.", nameof(JobsContainerName));
 
+        // Validate container names based on collection strategy
+        if (CollectionStrategy == CollectionStrategy.Dedicated)
+        {
+            ValidateDedicatedContainerNames();
+        }
+        else if (CollectionStrategy == CollectionStrategy.Consolidated)
+        {
+            ValidateConsolidatedContainerNames();
+        }
+
         if (DefaultThroughput < 400)
             throw new ArgumentException("DefaultThroughput must be at least 400 RU/s.", nameof(DefaultThroughput));
 
@@ -173,6 +218,39 @@ public class CosmosStorageOptions
 
         if (MaxConnectionLimit <= 0)
             throw new ArgumentException("MaxConnectionLimit must be positive.", nameof(MaxConnectionLimit));
+    }
+
+    private void ValidateDedicatedContainerNames()
+    {
+        if (string.IsNullOrWhiteSpace(ServersContainerName))
+            throw new ArgumentException("ServersContainerName cannot be null or empty when using Dedicated strategy.", nameof(ServersContainerName));
+        
+        if (string.IsNullOrWhiteSpace(LocksContainerName))
+            throw new ArgumentException("LocksContainerName cannot be null or empty when using Dedicated strategy.", nameof(LocksContainerName));
+        
+        if (string.IsNullOrWhiteSpace(QueuesContainerName))
+            throw new ArgumentException("QueuesContainerName cannot be null or empty when using Dedicated strategy.", nameof(QueuesContainerName));
+        
+        if (string.IsNullOrWhiteSpace(SetsContainerName))
+            throw new ArgumentException("SetsContainerName cannot be null or empty when using Dedicated strategy.", nameof(SetsContainerName));
+        
+        if (string.IsNullOrWhiteSpace(HashesContainerName))
+            throw new ArgumentException("HashesContainerName cannot be null or empty when using Dedicated strategy.", nameof(HashesContainerName));
+        
+        if (string.IsNullOrWhiteSpace(ListsContainerName))
+            throw new ArgumentException("ListsContainerName cannot be null or empty when using Dedicated strategy.", nameof(ListsContainerName));
+        
+        if (string.IsNullOrWhiteSpace(CountersContainerName))
+            throw new ArgumentException("CountersContainerName cannot be null or empty when using Dedicated strategy.", nameof(CountersContainerName));
+    }
+
+    private void ValidateConsolidatedContainerNames()
+    {
+        if (string.IsNullOrWhiteSpace(MetadataContainerName))
+            throw new ArgumentException("MetadataContainerName cannot be null or empty when using Consolidated strategy.", nameof(MetadataContainerName));
+        
+        if (string.IsNullOrWhiteSpace(CollectionsContainerName))
+            throw new ArgumentException("CollectionsContainerName cannot be null or empty when using Consolidated strategy.", nameof(CollectionsContainerName));
     }
 }
 

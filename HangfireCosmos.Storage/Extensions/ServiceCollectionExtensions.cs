@@ -70,6 +70,7 @@ public static class ServiceCollectionExtensions
         return CreateCosmosStorage(connectionString, opts =>
         {
             opts.DatabaseName = options.DatabaseName;
+            opts.CollectionStrategy = options.CollectionStrategy;
             opts.JobsContainerName = options.JobsContainerName;
             opts.ServersContainerName = options.ServersContainerName;
             opts.QueuesContainerName = options.QueuesContainerName;
@@ -78,6 +79,8 @@ public static class ServiceCollectionExtensions
             opts.HashesContainerName = options.HashesContainerName;
             opts.ListsContainerName = options.ListsContainerName;
             opts.SetsContainerName = options.SetsContainerName;
+            opts.MetadataContainerName = options.MetadataContainerName;
+            opts.CollectionsContainerName = options.CollectionsContainerName;
             opts.DefaultJobExpiration = options.DefaultJobExpiration;
             opts.LockTimeout = options.LockTimeout;
             opts.RequestTimeout = options.RequestTimeout;

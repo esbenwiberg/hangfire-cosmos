@@ -2,6 +2,7 @@ using Hangfire.States;
 using Hangfire.Storage;
 using HangfireCosmos.Storage.Documents;
 using HangfireCosmos.Storage.Repository;
+using System.Collections.Generic;
 
 namespace HangfireCosmos.Storage.Connection;
 
@@ -130,7 +131,25 @@ public class CosmosWriteOnlyTransaction : IWriteOnlyTransaction
                 job.QueueName = queue;
                 job.PartitionKey = $"job:{queue}";
                 job.State = "enqueued";
+                
+                // Set state data with Queue information for Hangfire dashboard
+                job.StateData = new Dictionary<string, string>
+                {
+                    ["Queue"] = queue,
+                    ["EnqueuedAt"] = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ")
+                };
+                
                 job.UpdatedAt = DateTime.UtcNow;
+
+                // Add to state history
+                job.StateHistory.Add(new StateHistoryEntry
+                {
+                    State = "enqueued",
+                    Reason = "Enqueued",
+                    CreatedAt = DateTime.UtcNow,
+                    Data = job.StateData
+                });
+
                 await _repository.UpdateDocumentAsync(_options.JobsContainerName, job);
             }
         });
@@ -256,7 +275,12 @@ public class CosmosWriteOnlyTransaction : IWriteOnlyTransaction
     public void RemoveFromSet(string key, string value)
     {
         if (string.IsNullOrEmpty(key)) throw new ArgumentNullException(nameof(key));
-        if (string.IsNullOrEmpty(value)) throw new ArgumentNullException(nameof(value));
+        if (string.IsNullOrEmpty(value))
+        {
+            // Hangfire sometimes passes null/empty values for cleanup operations
+            // Just ignore these instead of throwing an exception
+            return;
+        }
 
         _operations.Add(async () =>
         {
