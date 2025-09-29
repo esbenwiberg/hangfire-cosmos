@@ -222,6 +222,16 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
     {
         var ttl = _options.TtlSettings;
         
+        return _options.CollectionStrategy switch
+        {
+            CollectionStrategy.Dedicated => GetDedicatedContainerDefinitions(ttl),
+            CollectionStrategy.Consolidated => GetConsolidatedContainerDefinitions(ttl),
+            _ => throw new ArgumentException($"Unknown collection strategy: {_options.CollectionStrategy}")
+        };
+    }
+
+    private Dictionary<string, ContainerProperties> GetDedicatedContainerDefinitions(TtlSettings ttl)
+    {
         return new Dictionary<string, ContainerProperties>
         {
             [_options.JobsContainerName] = new ContainerProperties(_options.JobsContainerName, "/partitionKey")
@@ -259,6 +269,27 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
             {
                 DefaultTimeToLive = ttl.CounterDocumentTtl,
                 IndexingPolicy = GetCountersIndexingPolicy()
+            }
+        };
+    }
+
+    private Dictionary<string, ContainerProperties> GetConsolidatedContainerDefinitions(TtlSettings ttl)
+    {
+        return new Dictionary<string, ContainerProperties>
+        {
+            [_options.JobsContainerName] = new ContainerProperties(_options.JobsContainerName, "/partitionKey")
+            {
+                DefaultTimeToLive = ttl.JobDocumentTtl,
+                IndexingPolicy = GetJobsIndexingPolicy()
+            },
+            [_options.MetadataContainerName] = new ContainerProperties(_options.MetadataContainerName, "/partitionKey")
+            {
+                DefaultTimeToLive = ttl.ServerDocumentTtl, // Use shortest TTL for mixed content
+                IndexingPolicy = GetMetadataIndexingPolicy()
+            },
+            [_options.CollectionsContainerName] = new ContainerProperties(_options.CollectionsContainerName, "/partitionKey")
+            {
+                IndexingPolicy = GetCollectionsIndexingPolicy()
             }
         };
     }
@@ -402,6 +433,57 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
                 new IncludedPath { Path = "/documentType/?" },
                 new IncludedPath { Path = "/key/?" },
                 new IncludedPath { Path = "/expireAt/?" }
+            }
+        };
+    }
+
+    private IndexingPolicy GetMetadataIndexingPolicy()
+    {
+        return new IndexingPolicy
+        {
+            IndexingMode = IndexingMode.Consistent,
+            Automatic = true,
+            IncludedPaths =
+            {
+                new IncludedPath { Path = "/*" },
+                // Common paths for all metadata document types
+                new IncludedPath { Path = "/documentType/?" },
+                new IncludedPath { Path = "/expireAt/?" },
+                // Server document paths
+                new IncludedPath { Path = "/serverId/?" },
+                new IncludedPath { Path = "/lastHeartbeat/?" },
+                // Lock document paths
+                new IncludedPath { Path = "/resource/?" },
+                new IncludedPath { Path = "/owner/?" },
+                // Queue document paths
+                new IncludedPath { Path = "/queueName/?" },
+                new IncludedPath { Path = "/lastUpdated/?" },
+                // Counter document paths
+                new IncludedPath { Path = "/key/?" }
+            }
+        };
+    }
+
+    private IndexingPolicy GetCollectionsIndexingPolicy()
+    {
+        return new IndexingPolicy
+        {
+            IndexingMode = IndexingMode.Consistent,
+            Automatic = true,
+            IncludedPaths =
+            {
+                new IncludedPath { Path = "/*" },
+                // Common paths for all collection document types
+                new IncludedPath { Path = "/documentType/?" },
+                new IncludedPath { Path = "/key/?" },
+                new IncludedPath { Path = "/createdAt/?" },
+                // Set document paths
+                new IncludedPath { Path = "/value/?" },
+                new IncludedPath { Path = "/score/?" },
+                // Hash document paths
+                new IncludedPath { Path = "/field/?" },
+                // List document paths
+                new IncludedPath { Path = "/index/?" }
             }
         };
     }
