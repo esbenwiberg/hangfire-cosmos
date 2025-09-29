@@ -173,6 +173,41 @@ Choose between two collection strategies based on your needs:
 }
 ```
 
+#### Shared Throughput (Maximum Cost Savings)
+```json
+{
+  "HangfireCosmosOptions": {
+    "CollectionStrategy": "Consolidated",
+    "DatabaseName": "hangfire-shared",
+    "DefaultThroughput": 1000,
+    "UseSharedThroughput": true,
+    "JobsContainerName": "jobs",
+    "MetadataContainerName": "metadata",
+    "CollectionsContainerName": "collections"
+  }
+}
+```
+
+#### Shared Throughput with Dedicated Strategy
+```json
+{
+  "HangfireCosmosOptions": {
+    "CollectionStrategy": "Dedicated",
+    "DatabaseName": "hangfire-shared-dedicated",
+    "DefaultThroughput": 2000,
+    "UseSharedThroughput": true,
+    "JobsContainerName": "jobs",
+    "ServersContainerName": "servers",
+    "LocksContainerName": "locks",
+    "QueuesContainerName": "queues",
+    "SetsContainerName": "sets",
+    "HashesContainerName": "hashes",
+    "ListsContainerName": "lists",
+    "CountersContainerName": "counters"
+  }
+}
+```
+
 ### Advanced Configuration Options
 
 ```csharp
@@ -184,6 +219,7 @@ services.AddHangfire(config =>
         options.DatabaseName = "hangfire";
         options.CollectionStrategy = CollectionStrategy.Dedicated;
         options.DefaultThroughput = 400;
+        options.UseSharedThroughput = true;  // Enable shared throughput for cost savings
         
         // Auto-creation settings
         options.AutoCreateDatabase = true;
@@ -283,19 +319,27 @@ For detailed architecture information, see [`HangfireCosmos-Architecture.md`](Ha
 
 ### Collection Strategy Comparison
 
-| Strategy | Containers | Min RU/s | Use Case |
-|----------|------------|----------|----------|
-| **Dedicated** | 8 | 3,200 | High-volume, performance-critical workloads |
-| **Consolidated** | 3 | 1,200 | Cost-effective, smaller workloads |
+| Strategy | Throughput Mode | Containers | Min RU/s | Use Case |
+|----------|----------------|------------|----------|----------|
+| **Dedicated** | Dedicated | 8 | 3,200 | High-volume, performance-critical workloads |
+| **Dedicated** | **Shared** | 8 | **400+** | **Cost-effective dedicated containers with shared throughput** |
+| **Consolidated** | Dedicated | 3 | 1,200 | Cost-effective, smaller workloads |
+| **Consolidated** | **Shared** | 3 | **400+** | **Maximum cost savings for smaller workloads** |
 
-**Potential Savings**: Up to 60% reduction in minimum throughput costs with consolidated strategy.
+**Cost Savings with Shared Throughput**:
+- **Dedicated + Shared**: Up to 87% reduction (3,200 → 400+ RU/s)
+- **Consolidated + Shared**: Up to 67% reduction (1,200 → 400+ RU/s)
+- **Works with existing collections**: Containers share database-level throughput pool
 
 ### Best Practices
-- Use consolidated strategy for development and small production workloads
-- Use dedicated strategy for high-volume production workloads
+- **Use shared throughput** for maximum cost savings, especially in development and smaller production environments
+- Use dedicated throughput when you need guaranteed performance isolation per container
+- Use consolidated + shared strategy for development and small production workloads
+- Use dedicated + shared strategy when you need container isolation but want cost savings
 - Monitor RU consumption and adjust throughput accordingly
 - Implement proper TTL settings to manage storage costs
 - Use appropriate partition keys for optimal distribution
+- **Shared throughput works seamlessly with other collections** in the same database
 
 ## 🤝 Contributing
 

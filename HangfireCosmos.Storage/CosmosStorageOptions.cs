@@ -88,9 +88,16 @@ public class CosmosStorageOptions
     public string CollectionsContainerName { get; set; } = "collections";
 
     /// <summary>
-    /// Gets or sets the default throughput (RU/s) for containers.
+    /// Gets or sets the default throughput (RU/s) for containers or database (when using shared throughput).
     /// </summary>
     public int DefaultThroughput { get; set; } = 400;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to use shared throughput at the database level.
+    /// When true, throughput is provisioned at the database level and shared across all containers.
+    /// When false, each container gets its own dedicated throughput allocation.
+    /// </summary>
+    public bool UseSharedThroughput { get; set; } = false;
 
     /// <summary>
     /// Gets or sets the consistency level for Cosmos DB operations.
@@ -206,6 +213,10 @@ public class CosmosStorageOptions
 
         if (DefaultThroughput < 400)
             throw new ArgumentException("DefaultThroughput must be at least 400 RU/s.", nameof(DefaultThroughput));
+
+        // Validate shared throughput configuration
+        if (UseSharedThroughput && DefaultThroughput < 400)
+            throw new ArgumentException("When using shared throughput, DefaultThroughput must be at least 400 RU/s for the database.", nameof(DefaultThroughput));
 
         if (MaxRetryAttempts < 0)
             throw new ArgumentException("MaxRetryAttempts cannot be negative.", nameof(MaxRetryAttempts));

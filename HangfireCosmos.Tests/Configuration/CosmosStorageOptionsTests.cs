@@ -27,6 +27,7 @@ public class CosmosStorageOptionsTests
         options.ListsContainerName.Should().Be("lists");
         options.CountersContainerName.Should().Be("counters");
         options.DefaultThroughput.Should().Be(400);
+        options.UseSharedThroughput.Should().BeFalse();
         options.ConsistencyLevel.Should().Be(ConsistencyLevel.Session);
         options.DefaultJobExpiration.Should().Be(TimeSpan.FromDays(7));
         options.ServerTimeout.Should().Be(TimeSpan.FromMinutes(5));
@@ -322,6 +323,88 @@ public class CosmosStorageOptionsTests
         options.CacheExpiration.Should().Be(TimeSpan.FromMinutes(5));
         options.RetryDelay.Should().Be(TimeSpan.FromMilliseconds(100));
         options.RequestTimeout.Should().Be(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public void UseSharedThroughput_ShouldSetAndGetCorrectly()
+    {
+        // Arrange
+        var options = new CosmosStorageOptions();
+
+        // Act
+        options.UseSharedThroughput = true;
+
+        // Assert
+        options.UseSharedThroughput.Should().BeTrue();
+    }
+
+    [Fact]
+    public void UseSharedThroughput_DefaultValue_ShouldBeFalse()
+    {
+        // Arrange & Act
+        var options = new CosmosStorageOptions();
+
+        // Assert
+        options.UseSharedThroughput.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void UseSharedThroughput_WithBothValues_ShouldSetCorrectly(bool useSharedThroughput)
+    {
+        // Arrange
+        var options = new CosmosStorageOptions();
+
+        // Act
+        options.UseSharedThroughput = useSharedThroughput;
+
+        // Assert
+        options.UseSharedThroughput.Should().Be(useSharedThroughput);
+    }
+
+    [Theory]
+    [InlineData(400, true)]
+    [InlineData(1000, true)]
+    [InlineData(4000, true)]
+    [InlineData(400, false)]
+    [InlineData(1000, false)]
+    [InlineData(4000, false)]
+    public void Validate_WithValidSharedThroughputConfiguration_ShouldNotThrow(int throughput, bool useSharedThroughput)
+    {
+        // Arrange
+        var options = new CosmosStorageOptions
+        {
+            DatabaseName = "test-db",
+            JobsContainerName = "test-jobs",
+            DefaultThroughput = throughput,
+            UseSharedThroughput = useSharedThroughput
+        };
+
+        // Act & Assert
+        var action = () => options.Validate();
+        action.Should().NotThrow();
+    }
+
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(100, true)]
+    [InlineData(399, true)]
+    public void Validate_WithInvalidSharedThroughputConfiguration_ShouldThrowArgumentException(int throughput, bool useSharedThroughput)
+    {
+        // Arrange
+        var options = new CosmosStorageOptions
+        {
+            DatabaseName = "test-db",
+            JobsContainerName = "test-jobs",
+            DefaultThroughput = throughput,
+            UseSharedThroughput = useSharedThroughput
+        };
+
+        // Act & Assert
+        var action = () => options.Validate();
+        action.Should().Throw<ArgumentException>()
+            .WithMessage("*DefaultThroughput must be at least 400 RU/s*");
     }
 }
 

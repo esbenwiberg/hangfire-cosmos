@@ -419,4 +419,189 @@ public class CosmosDocumentRepositoryContainerInitializationTests
             null,
             It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task InitializeAsync_WithSharedThroughputDedicatedStrategy_ShouldCreateDatabaseWithThroughputAndContainersWithoutThroughput()
+    {
+        // Arrange
+        var options = new CosmosStorageOptions
+        {
+            DatabaseName = "test-db",
+            CollectionStrategy = CollectionStrategy.Dedicated,
+            AutoCreateDatabase = true,
+            AutoCreateContainers = true,
+            DefaultThroughput = 1000,
+            UseSharedThroughput = true
+        };
+
+        var mockDatabaseResponse = new Mock<DatabaseResponse>();
+        mockDatabaseResponse.Setup(x => x.Database).Returns(_mockDatabase.Object);
+
+        var mockContainerResponse = new Mock<ContainerResponse>();
+        mockContainerResponse.Setup(x => x.Container).Returns(_mockContainer.Object);
+
+        _mockCosmosClient.Setup(x => x.CreateDatabaseIfNotExistsAsync(
+                "test-db",
+                1000,
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mockDatabaseResponse.Object);
+
+        _mockDatabase.Setup(x => x.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                (int?)null,
+                (RequestOptions?)null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mockContainerResponse.Object);
+
+        var repository = new CosmosDocumentRepository(_mockCosmosClient.Object, options);
+
+        // Act
+        await repository.InitializeAsync();
+
+        // Assert
+        // Verify database created with throughput
+        _mockCosmosClient.Verify(x => x.CreateDatabaseIfNotExistsAsync(
+            "test-db",
+            1000,
+            null,
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        // Verify containers created without throughput (8 containers for dedicated strategy)
+        _mockDatabase.Verify(x => x.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(),
+            (int?)null,
+            (RequestOptions?)null,
+            It.IsAny<CancellationToken>()), Times.Exactly(8));
+
+        // Verify no containers created with throughput
+        _mockDatabase.Verify(x => x.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(),
+            It.IsAny<int>(),
+            (RequestOptions?)null,
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WithSharedThroughputConsolidatedStrategy_ShouldCreateDatabaseWithThroughputAndContainersWithoutThroughput()
+    {
+        // Arrange
+        var options = new CosmosStorageOptions
+        {
+            DatabaseName = "test-db",
+            CollectionStrategy = CollectionStrategy.Consolidated,
+            AutoCreateDatabase = true,
+            AutoCreateContainers = true,
+            DefaultThroughput = 800,
+            UseSharedThroughput = true,
+            JobsContainerName = "jobs",
+            MetadataContainerName = "metadata",
+            CollectionsContainerName = "collections"
+        };
+
+        var mockDatabaseResponse = new Mock<DatabaseResponse>();
+        mockDatabaseResponse.Setup(x => x.Database).Returns(_mockDatabase.Object);
+
+        var mockContainerResponse = new Mock<ContainerResponse>();
+        mockContainerResponse.Setup(x => x.Container).Returns(_mockContainer.Object);
+
+        _mockCosmosClient.Setup(x => x.CreateDatabaseIfNotExistsAsync(
+                "test-db",
+                800,
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mockDatabaseResponse.Object);
+
+        _mockDatabase.Setup(x => x.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                (int?)null,
+                (RequestOptions?)null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mockContainerResponse.Object);
+
+        var repository = new CosmosDocumentRepository(_mockCosmosClient.Object, options);
+
+        // Act
+        await repository.InitializeAsync();
+
+        // Assert
+        // Verify database created with throughput
+        _mockCosmosClient.Verify(x => x.CreateDatabaseIfNotExistsAsync(
+            "test-db",
+            800,
+            null,
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        // Verify containers created without throughput (3 containers for consolidated strategy)
+        _mockDatabase.Verify(x => x.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(),
+            (int?)null,
+            (RequestOptions?)null,
+            It.IsAny<CancellationToken>()), Times.Exactly(3));
+
+        // Verify no containers created with throughput
+        _mockDatabase.Verify(x => x.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(),
+            It.IsAny<int>(),
+            (RequestOptions?)null,
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WithDedicatedThroughput_ShouldCreateDatabaseWithoutThroughputAndContainersWithThroughput()
+    {
+        // Arrange
+        var options = new CosmosStorageOptions
+        {
+            DatabaseName = "test-db",
+            CollectionStrategy = CollectionStrategy.Dedicated,
+            AutoCreateDatabase = true,
+            AutoCreateContainers = true,
+            DefaultThroughput = 600,
+            UseSharedThroughput = false
+        };
+
+        var mockDatabaseResponse = new Mock<DatabaseResponse>();
+        mockDatabaseResponse.Setup(x => x.Database).Returns(_mockDatabase.Object);
+
+        var mockContainerResponse = new Mock<ContainerResponse>();
+        mockContainerResponse.Setup(x => x.Container).Returns(_mockContainer.Object);
+
+        _mockCosmosClient.Setup(x => x.CreateDatabaseIfNotExistsAsync(
+                "test-db",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mockDatabaseResponse.Object);
+
+        _mockDatabase.Setup(x => x.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                600,
+                (RequestOptions?)null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mockContainerResponse.Object);
+
+        var repository = new CosmosDocumentRepository(_mockCosmosClient.Object, options);
+
+        // Act
+        await repository.InitializeAsync();
+
+        // Assert
+        // Verify database created without throughput
+        _mockCosmosClient.Verify(x => x.CreateDatabaseIfNotExistsAsync(
+            "test-db",
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        // Verify containers created with throughput (8 containers for dedicated strategy)
+        _mockDatabase.Verify(x => x.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(),
+            600,
+            (RequestOptions?)null,
+            It.IsAny<CancellationToken>()), Times.Exactly(8));
+
+        // Verify no containers created without throughput
+        _mockDatabase.Verify(x => x.CreateContainerIfNotExistsAsync(
+            It.IsAny<ContainerProperties>(),
+            (int?)null,
+            (RequestOptions?)null,
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

@@ -728,10 +728,20 @@ public class CosmosContainerFactory : ICosmosContainerFactory
 ### Performance Tuning
 
 1. **Throughput Configuration**
+   - **Shared Throughput (Recommended for Cost Savings)**:
+     - Provision throughput at database level (400+ RU/s)
+     - All containers share the throughput pool
+     - Up to 87% cost reduction vs dedicated throughput
+     - Works seamlessly with existing collections in the database
+     - Set `UseSharedThroughput = true` in configuration
+   - **Dedicated Throughput (Performance Isolation)**:
+     - Each container gets its own throughput allocation
+     - Better performance isolation and predictability
+     - Higher cost but guaranteed performance per container
+     - Set `UseSharedThroughput = false` (default)
    - Start with 400 RU/s for development
    - Monitor RU consumption in production
    - Use autoscale for variable workloads
-   - Consider dedicated throughput for high-volume containers
 
 2. **Monitoring Setup**
    ```csharp

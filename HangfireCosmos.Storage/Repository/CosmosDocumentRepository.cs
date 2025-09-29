@@ -193,10 +193,22 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
     {
         if (_options.AutoCreateDatabase)
         {
-            await _cosmosClient.CreateDatabaseIfNotExistsAsync(
-                _options.DatabaseName,
-                _options.DefaultThroughput,
-                cancellationToken: cancellationToken);
+            if (_options.UseSharedThroughput)
+            {
+                // When using shared throughput, provision throughput at database level
+                await _cosmosClient.CreateDatabaseIfNotExistsAsync(
+                    _options.DatabaseName,
+                    _options.DefaultThroughput,
+                    cancellationToken: cancellationToken);
+            }
+            else
+            {
+                // When using dedicated throughput, create database without throughput
+                // (throughput will be provisioned at container level)
+                await _cosmosClient.CreateDatabaseIfNotExistsAsync(
+                    _options.DatabaseName,
+                    cancellationToken: cancellationToken);
+            }
         }
 
         _database = _cosmosClient.GetDatabase(_options.DatabaseName);
@@ -211,10 +223,22 @@ public class CosmosDocumentRepository : ICosmosDocumentRepository
 
         foreach (var (containerName, containerProperties) in containerDefinitions)
         {
-            await _database.CreateContainerIfNotExistsAsync(
-                containerProperties,
-                _options.DefaultThroughput,
-                cancellationToken: cancellationToken);
+            if (_options.UseSharedThroughput)
+            {
+                // When using shared throughput, create containers without dedicated throughput
+                // They will share the database-level throughput
+                await _database.CreateContainerIfNotExistsAsync(
+                    containerProperties,
+                    cancellationToken: cancellationToken);
+            }
+            else
+            {
+                // When using dedicated throughput, provision throughput per container
+                await _database.CreateContainerIfNotExistsAsync(
+                    containerProperties,
+                    _options.DefaultThroughput,
+                    cancellationToken: cancellationToken);
+            }
         }
     }
 
