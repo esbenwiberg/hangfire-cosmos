@@ -1,4 +1,5 @@
 using Microsoft.Azure.Cosmos;
+using HangfireCosmos.Storage.Resilience;
 
 namespace HangfireCosmos.Storage;
 
@@ -21,6 +22,27 @@ public enum CollectionStrategy
 }
 
 /// <summary>
+/// Authentication strategy for Cosmos DB connections.
+/// </summary>
+public enum CosmosAuthenticationMode
+{
+    /// <summary>
+    /// Use connection string for authentication (default).
+    /// </summary>
+    ConnectionString,
+    
+    /// <summary>
+    /// Use Azure Managed Identity for authentication.
+    /// </summary>
+    ManagedIdentity,
+    
+    /// <summary>
+    /// Use Azure Service Principal for authentication.
+    /// </summary>
+    ServicePrincipal
+}
+
+/// <summary>
 /// Configuration options for the Cosmos DB storage provider.
 /// </summary>
 public class CosmosStorageOptions
@@ -34,6 +56,32 @@ public class CosmosStorageOptions
     /// Gets or sets the collection strategy for container organization.
     /// </summary>
     public CollectionStrategy CollectionStrategy { get; set; } = CollectionStrategy.Dedicated;
+
+    /// <summary>
+    /// Gets or sets the authentication mode for Cosmos DB connection.
+    /// </summary>
+    public CosmosAuthenticationMode AuthenticationMode { get; set; } = CosmosAuthenticationMode.ConnectionString;
+
+    /// <summary>
+    /// Gets or sets the Cosmos DB connection string (required for ConnectionString authentication mode).
+    /// </summary>
+    public string? ConnectionString { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Cosmos DB account endpoint (required for ManagedIdentity and ServicePrincipal authentication modes).
+    /// </summary>
+    public string? AccountEndpoint { get; set; }
+
+    /// <summary>
+    /// Gets or sets the client ID for user-assigned managed identity (optional for ManagedIdentity authentication mode).
+    /// If not specified, system-assigned managed identity will be used.
+    /// </summary>
+    public string? ManagedIdentityClientId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the service principal configuration (required for ServicePrincipal authentication mode).
+    /// </summary>
+    public ServicePrincipalOptions? ServicePrincipal { get; set; }
 
     /// <summary>
     /// Gets or sets the name of the Jobs container.
@@ -190,6 +238,11 @@ public class CosmosStorageOptions
     public PerformanceOptions Performance { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets circuit breaker configuration options.
+    /// </summary>
+    public CircuitBreakerOptions CircuitBreaker { get; set; } = new();
+
+    /// <summary>
     /// Validates the configuration options.
     /// </summary>
     /// <exception cref="ArgumentException">Thrown when configuration is invalid.</exception>
@@ -200,6 +253,9 @@ public class CosmosStorageOptions
 
         if (string.IsNullOrWhiteSpace(JobsContainerName))
             throw new ArgumentException("JobsContainerName cannot be null or empty.", nameof(JobsContainerName));
+
+        // Validate authentication configuration
+        ValidateAuthenticationConfiguration();
 
         // Validate container names based on collection strategy
         if (CollectionStrategy == CollectionStrategy.Dedicated)
@@ -229,6 +285,35 @@ public class CosmosStorageOptions
 
         if (MaxConnectionLimit <= 0)
             throw new ArgumentException("MaxConnectionLimit must be positive.", nameof(MaxConnectionLimit));
+    }
+
+    private void ValidateAuthenticationConfiguration()
+    {
+        switch (AuthenticationMode)
+        {
+            case CosmosAuthenticationMode.ConnectionString:
+                if (string.IsNullOrWhiteSpace(ConnectionString))
+                    throw new ArgumentException("ConnectionString is required when using ConnectionString authentication mode.", nameof(ConnectionString));
+                break;
+
+            case CosmosAuthenticationMode.ManagedIdentity:
+                if (string.IsNullOrWhiteSpace(AccountEndpoint))
+                    throw new ArgumentException("AccountEndpoint is required when using ManagedIdentity authentication mode.", nameof(AccountEndpoint));
+                break;
+
+            case CosmosAuthenticationMode.ServicePrincipal:
+                if (string.IsNullOrWhiteSpace(AccountEndpoint))
+                    throw new ArgumentException("AccountEndpoint is required when using ServicePrincipal authentication mode.", nameof(AccountEndpoint));
+                
+                if (ServicePrincipal == null)
+                    throw new ArgumentException("ServicePrincipal configuration is required when using ServicePrincipal authentication mode.", nameof(ServicePrincipal));
+                
+                ServicePrincipal.Validate();
+                break;
+
+            default:
+                throw new ArgumentException($"Unknown authentication mode: {AuthenticationMode}", nameof(AuthenticationMode));
+        }
     }
 
     private void ValidateDedicatedContainerNames()
@@ -336,4 +421,41 @@ public class PerformanceOptions
     /// Gets or sets a value indicating whether to enable TCP connection endpoint rediscovery.
     /// </summary>
     public bool EnableTcpConnectionEndpointRediscovery { get; set; } = true;
+}
+
+/// <summary>
+/// Service principal configuration for Azure AD authentication.
+/// </summary>
+public class ServicePrincipalOptions
+{
+    /// <summary>
+    /// Gets or sets the Azure AD tenant ID.
+    /// </summary>
+    public string TenantId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the Azure AD application (client) ID.
+    /// </summary>
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the Azure AD application client secret.
+    /// </summary>
+    public string ClientSecret { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Validates the service principal configuration.
+    /// </summary>
+    /// <exception cref="ArgumentException">Thrown when configuration is invalid.</exception>
+    public void Validate()
+    {
+        if (string.IsNullOrWhiteSpace(TenantId))
+            throw new ArgumentException("TenantId cannot be null or empty.", nameof(TenantId));
+
+        if (string.IsNullOrWhiteSpace(ClientId))
+            throw new ArgumentException("ClientId cannot be null or empty.", nameof(ClientId));
+
+        if (string.IsNullOrWhiteSpace(ClientSecret))
+            throw new ArgumentException("ClientSecret cannot be null or empty.", nameof(ClientSecret));
+    }
 }

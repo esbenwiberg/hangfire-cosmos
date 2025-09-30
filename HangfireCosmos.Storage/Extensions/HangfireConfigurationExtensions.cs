@@ -1,5 +1,7 @@
 using Hangfire;
 using Microsoft.Azure.Cosmos;
+using HangfireCosmos.Storage.Authentication;
+using HangfireCosmos.Storage.Resilience;
 
 namespace HangfireCosmos.Storage.Extensions;
 
@@ -105,6 +107,90 @@ public static class HangfireConfigurationExtensions
         if (options == null) throw new ArgumentNullException(nameof(options));
 
         var storage = new CosmosStorage(cosmosClient, options);
+        return configuration.UseStorage(storage);
+    }
+
+    /// <summary>
+    /// Configures Hangfire to use Cosmos DB storage with managed identity authentication.
+    /// </summary>
+    /// <param name="configuration">The Hangfire global configuration.</param>
+    /// <param name="accountEndpoint">The Cosmos DB account endpoint.</param>
+    /// <param name="configureOptions">Optional action to configure storage options.</param>
+    /// <param name="managedIdentityClientId">Optional client ID for user-assigned managed identity.</param>
+    /// <returns>The updated global configuration.</returns>
+    public static IGlobalConfiguration UseCosmosStorageWithManagedIdentity(
+        this IGlobalConfiguration configuration,
+        string accountEndpoint,
+        Action<CosmosStorageOptions>? configureOptions = null,
+        string? managedIdentityClientId = null)
+    {
+        if (configuration == null) throw new ArgumentNullException(nameof(configuration));
+        if (string.IsNullOrWhiteSpace(accountEndpoint)) throw new ArgumentException("Account endpoint cannot be null or empty.", nameof(accountEndpoint));
+
+        var options = new CosmosStorageOptions
+        {
+            AuthenticationMode = CosmosAuthenticationMode.ManagedIdentity,
+            AccountEndpoint = accountEndpoint,
+            ManagedIdentityClientId = managedIdentityClientId
+        };
+        
+        configureOptions?.Invoke(options);
+        options.Validate();
+
+        // Create client factory without logger for extension methods
+        var clientFactory = new CosmosClientFactory();
+        
+        var cosmosClient = clientFactory.CreateClientAsync(options).GetAwaiter().GetResult();
+        var storage = new CosmosStorage(cosmosClient, options);
+        
+        return configuration.UseStorage(storage);
+    }
+
+    /// <summary>
+    /// Configures Hangfire to use Cosmos DB storage with service principal authentication.
+    /// </summary>
+    /// <param name="configuration">The Hangfire global configuration.</param>
+    /// <param name="accountEndpoint">The Cosmos DB account endpoint.</param>
+    /// <param name="tenantId">The Azure AD tenant ID.</param>
+    /// <param name="clientId">The Azure AD application (client) ID.</param>
+    /// <param name="clientSecret">The Azure AD application client secret.</param>
+    /// <param name="configureOptions">Optional action to configure storage options.</param>
+    /// <returns>The updated global configuration.</returns>
+    public static IGlobalConfiguration UseCosmosStorageWithServicePrincipal(
+        this IGlobalConfiguration configuration,
+        string accountEndpoint,
+        string tenantId,
+        string clientId,
+        string clientSecret,
+        Action<CosmosStorageOptions>? configureOptions = null)
+    {
+        if (configuration == null) throw new ArgumentNullException(nameof(configuration));
+        if (string.IsNullOrWhiteSpace(accountEndpoint)) throw new ArgumentException("Account endpoint cannot be null or empty.", nameof(accountEndpoint));
+        if (string.IsNullOrWhiteSpace(tenantId)) throw new ArgumentException("Tenant ID cannot be null or empty.", nameof(tenantId));
+        if (string.IsNullOrWhiteSpace(clientId)) throw new ArgumentException("Client ID cannot be null or empty.", nameof(clientId));
+        if (string.IsNullOrWhiteSpace(clientSecret)) throw new ArgumentException("Client secret cannot be null or empty.", nameof(clientSecret));
+
+        var options = new CosmosStorageOptions
+        {
+            AuthenticationMode = CosmosAuthenticationMode.ServicePrincipal,
+            AccountEndpoint = accountEndpoint,
+            ServicePrincipal = new ServicePrincipalOptions
+            {
+                TenantId = tenantId,
+                ClientId = clientId,
+                ClientSecret = clientSecret
+            }
+        };
+        
+        configureOptions?.Invoke(options);
+        options.Validate();
+
+        // Create client factory without logger for extension methods
+        var clientFactory = new CosmosClientFactory();
+        
+        var cosmosClient = clientFactory.CreateClientAsync(options).GetAwaiter().GetResult();
+        var storage = new CosmosStorage(cosmosClient, options);
+        
         return configuration.UseStorage(storage);
     }
 }
